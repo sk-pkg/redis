@@ -1,4 +1,4 @@
-module github.com/seakee-pkg/redis
+module github.com/sk-pkg/redis
 
 go 1.16
 

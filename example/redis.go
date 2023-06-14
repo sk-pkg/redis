@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/seakee-pkg/redis"
+	"github.com/sk-pkg/redis"
 	"log"
 )
 

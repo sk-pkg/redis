@@ -5,14 +5,14 @@ Redis是在redigo基础上封装的快速使用包。
 ## 安装
 
 ```shell
-go get "github.com/seakee-pkg/redis"
+go get "github.com/sk-pkg/redis"
 ```
 
 ## 快速开始
 ```go
 import (
 	"fmt"
-	"github.com/seakee-pkg/redis"
+	"github.com/sk-pkg/redis"
 	"log"
 )
 
