@@ -12,9 +12,12 @@ const (
 )
 
 func main() {
-	redisConn := redis.New(redis.WithAddress(address), redis.WithPrefix(prefix))
+	redisConn, err := redis.New(redis.WithAddress(address), redis.WithPrefix(prefix))
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	err := redisConn.Set("key", "value", 10)
+	err = redisConn.Set("key", "value", 10)
 	if err != nil {
 		log.Fatal(err)
 	}
