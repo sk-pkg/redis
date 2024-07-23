@@ -93,7 +93,27 @@ func WithIdleTimeout(idleTimeout time.Duration) Option {
 	}
 }
 
-func New(opts ...Option) *Manager {
+// New creates a new Redis Manager with the given options
+//
+// This function initializes a new Redis Manager with a connection pool.
+// It applies all provided options and sets default values for unspecified options.
+//
+// Parameters:
+//   - opts: A list of Option functions to configure the Redis Manager
+//
+// Returns:
+//   - *Manager: A new Redis Manager with the given options
+//   - error: Any error that occurred during the creation
+//
+// Example:
+//
+//	manager, err := New(
+//	    WithAddress("localhost:6379"),
+//	    WithPassword("secret"),
+//	    WithPrefix("myapp"),
+//	    WithMaxActive(200),
+//	)
+func New(opts ...Option) (*Manager, error) {
 	opt := &option{
 		network:     DefaultNetwork,
 		maxIdle:     DefaultMaxIdle,
@@ -106,7 +126,7 @@ func New(opts ...Option) *Manager {
 		f(opt)
 	}
 
-	// redis连接池
+	// Initialize Redis connection pool
 	connPool := &redis.Pool{
 		MaxIdle:     opt.maxIdle,
 		MaxActive:   opt.maxActive,
@@ -132,7 +152,19 @@ func New(opts ...Option) *Manager {
 		Wait: true,
 	}
 
-	return &Manager{ConnPool: connPool, Prefix: opt.prefix}
+	m := &Manager{ConnPool: connPool, Prefix: opt.prefix}
+
+	err := m.Ping()
+
+	return m, err
+}
+
+// Ping sends a PING command to the Redis server and returns an error if the connection fails
+// Returns:
+//   - error: Any error that occurred during the PING command
+func (m *Manager) Ping() error {
+	_, err := m.Do("PING")
+	return err
 }
 
 // Do 执行redigo原生方法
