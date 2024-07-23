@@ -7,86 +7,99 @@ package redis
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/gomodule/redigo/redis"
 	"strconv"
 	"time"
-	"unsafe"
-
-	"github.com/gomodule/redigo/redis"
 )
 
+// Default constants for Redis connection pool configuration
 const (
-	DefaultMaxIdle     = 30
-	DefaultMaxActive   = 100
-	DefaultIdleTimeout = 30 * time.Second
-	DefaultDB          = 0
-	DefaultNetwork     = "tcp"
+	DefaultMaxIdle     = 30               // Maximum number of idle connections in the pool
+	DefaultMaxActive   = 100              // Maximum number of connections allocated by the pool at a given time
+	DefaultIdleTimeout = 30 * time.Second // Timeout for idle connections in the pool
+	DefaultDB          = 0                // Default Redis database number
+	DefaultNetwork     = "tcp"            // Default network type for Redis connection
 )
 
+// Option is a function type that modifies the option struct
 type Option func(*option)
 
+// option represents the configuration options for the Redis client
 type option struct {
 	network     string
 	address     string
 	password    string
 	prefix      string
-	maxIdle     int // 最大空闲连接数
-	maxActive   int // 一个pool所能分配的最大的连接数目
-	db          int
-	idleTimeout time.Duration // 空闲连接超时时间，超过超时时间的空闲连接会被关闭。
+	maxIdle     int           // Maximum number of idle connections in the pool
+	maxActive   int           // Maximum number of connections allocated by the pool at a given time
+	db          int           // Redis database number
+	idleTimeout time.Duration // Timeout for idle connections in the pool
 }
 
+// Manager represents a Redis client with a connection pool
 type Manager struct {
-	ConnPool *redis.Pool
-	Prefix   string
+	ConnPool *redis.Pool // Redis connection pool
+	Prefix   string      // Prefix added to all keys
 }
 
+// ZSetMember represents a member of a sorted set with its score
 type ZSetMember struct {
 	Score  float64
-	Member interface{}
+	Member any
 }
 
+// WithAddress sets the Redis server address
 func WithAddress(address string) Option {
 	return func(o *option) {
 		o.address = address
 	}
 }
 
+// WithNetwork sets the network type for Redis connection
 func WithNetwork(network string) Option {
 	return func(o *option) {
 		o.network = network
 	}
 }
 
+// WithPassword sets the Redis server password
 func WithPassword(password string) Option {
 	return func(o *option) {
 		o.password = password
 	}
 }
 
+// WithPrefix sets the key prefix for all Redis operations
 func WithPrefix(prefix string) Option {
 	return func(o *option) {
 		o.prefix = prefix + ":"
 	}
 }
 
+// WithMaxActive sets the maximum number of connections allocated by the pool at a given time
 func WithMaxActive(maxActive int) Option {
 	return func(o *option) {
 		o.maxActive = maxActive
 	}
 }
 
+// WithDB sets the Redis database number
 func WithDB(db int) Option {
 	return func(o *option) {
 		o.db = db
 	}
 }
 
+// WithMaxIdle sets the maximum number of idle connections in the pool
 func WithMaxIdle(maxIdle int) Option {
 	return func(o *option) {
 		o.maxIdle = maxIdle
 	}
 }
 
+// WithIdleTimeout sets the timeout for idle connections in the pool
 func WithIdleTimeout(idleTimeout time.Duration) Option {
 	return func(o *option) {
 		o.idleTimeout = idleTimeout
@@ -178,31 +191,72 @@ func (m *Manager) Ping() error {
 	return err
 }
 
-// Do 执行redigo原生方法
-func (m *Manager) Do(commandName string, args ...interface{}) (interface{}, error) {
+// Do execute a Redis command with the given arguments
+//
+// Parameters:
+//   - commandName: The name of the Redis command to execute
+//   - args: The arguments for the Redis command
+//
+// Returns:
+//   - any: The result of the Redis command
+//   - error: Any error that occurred during the execution
+//
+// Example:
+//
+//	result, err := manager.Do("SET", "mykey", "myvalue")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func (m *Manager) Do(commandName string, args ...any) (any, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 	return conn.Do(commandName, args...)
 }
 
-// Lua
-// @title   Lua脚本
-// @author  华正超 (2021/12/08)
-// @param   keyCount (key总数) | script (lua脚本内容) | keysAndArgs (key和参数)
-// @return  error
-func (m *Manager) Lua(keyCount int, script string, keysAndArgs []string) error {
+// Lua executes a Lua script on the Redis server
+//
+// Parameters:
+//   - keyCount: The number of keys used in the script
+//   - script: The Lua script to execute
+//   - keysAndArgs: A slice containing the keys and arguments for the script
+//
+// Returns:
+//   - any: The result of the Lua script execution
+//   - error: Any error that occurred during the script execution
+//
+// Example:
+//
+//	script := `return redis.call('SET', KEYS[1], ARGV[1])`
+//	result, err := manager.Lua(1, script, []string{"mykey", "myvalue"})
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func (m *Manager) Lua(keyCount int, script string, keysAndArgs []string) (any, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	args := redis.Args{}.AddFlat(keysAndArgs)
 	lua := redis.NewScript(keyCount, script)
 
-	_, err := redis.Int(lua.Do(conn, args...))
-
-	return err
+	return lua.Do(conn, args...)
 }
 
-// Exists 返回一个指定的key是否存在
+// Exists checks if a key exists in Redis
+//
+// Parameters:
+//   - key: The key to check
+//
+// Returns:
+//   - bool: True if the key exists, false otherwise
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	exists, err := manager.Exists("mykey")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Key exists: %v\n", exists)
 func (m *Manager) Exists(key string) (bool, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
@@ -210,7 +264,22 @@ func (m *Manager) Exists(key string) (bool, error) {
 	return redis.Bool(conn.Do("EXISTS", m.prefixKey(key)))
 }
 
-// Del 返回删除一个指定key的结果
+// Del deletes a key from Redis
+//
+// Parameters:
+//   - key: The key to delete
+//
+// Returns:
+//   - bool: True if the key was deleted, false if the key did not exist
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	deleted, err := manager.Del("mykey")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Key deleted: %v\n", deleted)
 func (m *Manager) Del(key string) (bool, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
@@ -218,29 +287,87 @@ func (m *Manager) Del(key string) (bool, error) {
 	return redis.Bool(conn.Do("DEL", m.prefixKey(key)))
 }
 
-// BatchDel 批量删除指定key相关键的所有内容
-// 使用*key*查出相关key，然后循环删除
-// 此方法慎用，可能会阻塞Redis
-func (m *Manager) BatchDel(key string) error {
+// BatchDel deletes all keys matching a given pattern.
+//
+// It uses the SCAN command to iterate through keys, which is more efficient
+// and less blocking than the KEYS command for large datasets.
+//
+// Parameters:
+//   - pattern: The pattern to match keys for deletion. The function will prepend
+//     the Manager's prefix and add wildcards to create the full pattern.
+//
+// Returns:
+//   - error: An error if the operation fails, or nil if successful.
+//
+// The function uses a cursor-based iteration to scan keys in batches,
+// deleting matched keys in each iteration. This approach is more
+// memory-efficient and less likely to block the Redis server compared
+// to fetching and deleting all keys at once.
+//
+// Note: This operation may still take a considerable amount of time for
+// very large datasets. Consider implementing additional control mechanisms
+// (e.g., timeouts, background processing) for extremely large operations.
+//
+// Example:
+//
+//	err := manager.BatchDel("user:*")
+//	if err != nil {
+//	    log.Printf("Failed to batch delete: %v", err)
+//	}
+func (m *Manager) BatchDel(pattern string) error {
+	// Get a connection from the pool
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	keys, err := redis.Strings(conn.Do("KEYS", "*"+m.Prefix+key+"*"))
-	if err != nil {
-		return err
-	}
+	// Initialize cursor and create the full pattern
+	cursor := 0
+	fullPattern := "*" + m.Prefix + pattern + "*"
 
-	for _, k := range keys {
-		_, err = redis.Bool(conn.Do("DEL", k))
+	// Iterate through all keys matching the pattern
+	for {
+		// Perform SCAN operation
+		reply, err := redis.Values(conn.Do("SCAN", cursor, "MATCH", fullPattern, "COUNT", 100))
 		if err != nil {
-			return err
+			return fmt.Errorf("SCAN operation failed: %w", err)
+		}
+
+		// Extract cursor and keys from the reply
+		cursor, _ = redis.Int(reply[0], nil)
+		keys, _ := redis.Strings(reply[1], nil)
+
+		// Delete the found keys if any
+		if len(keys) > 0 {
+			_, err = conn.Do("DEL", redis.Args{}.AddFlat(keys)...)
+			if err != nil {
+				return fmt.Errorf("DEL operation failed: %w", err)
+			}
+		}
+
+		// Break the loop if we've scanned all keys
+		if cursor == 0 {
+			break
 		}
 	}
 
 	return nil
 }
 
-// Ttl 返回一个指定key缓存的剩余时间，单位秒
+// Ttl returns the remaining time to live of a key in seconds
+//
+// Parameters:
+//   - key: The key to check
+//
+// Returns:
+//   - int: The remaining time to live in seconds, or a negative value if the key does not exist or has no expiry
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	ttl, err := manager.Ttl("mykey")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Time to live: %d seconds\n", ttl)
 func (m *Manager) Ttl(key string) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
@@ -248,7 +375,21 @@ func (m *Manager) Ttl(key string) (int, error) {
 	return redis.Int(conn.Do("TTL", m.prefixKey(key)))
 }
 
-// Expire 设置指定key的过期时间
+// Expire sets an expiration time (in seconds) on a key
+//
+// Parameters:
+//   - key: The key to set the expiration on
+//   - ttl: The time to live in seconds
+//
+// Returns:
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	err := manager.Expire("mykey", 3600) // Expire in 1 hour
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
 func (m *Manager) Expire(key string, ttl int) error {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
@@ -258,15 +399,26 @@ func (m *Manager) Expire(key string, ttl int) error {
 	return err
 }
 
-// Set 保存一组指定的<key,value>
-func (m *Manager) Set(key string, data interface{}, ttl int) error {
+// Set stores a key-value pair in Redis
+//
+// Parameters:
+//   - key: The key under which to store the value
+//   - data: The value to store (will be JSON-encoded)
+//   - ttl: The time to live in seconds (0 for no expiration)
+//
+// Returns:
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	err := manager.Set("user:1", User{Name: "John", Age: 30}, 3600)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func (m *Manager) Set(key string, data any, ttl int) (err error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	value, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
 	if ttl > 0 {
 		_, err = conn.Do("SET", m.prefixKey(key), data, "EX", ttl)
 	} else {
@@ -276,8 +428,23 @@ func (m *Manager) Set(key string, data interface{}, ttl int) error {
 	return err
 }
 
-// SetString 缓存字符串（TTL单位：s）
-func (m *Manager) SetString(key string, str string, ttl int) error {
+// SetString stores a string value in Redis
+//
+// Parameters:
+//   - key: The key under which to store the string
+//   - str: The string to store
+//   - ttl: The time to live in seconds (0 for no expiration)
+//
+// Returns:
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	err := manager.SetString("greeting", "Hello, World!", 3600)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func (m *Manager) SetString(key string, str string, ttl int) (err error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
@@ -290,7 +457,22 @@ func (m *Manager) SetString(key string, str string, ttl int) error {
 	return err
 }
 
-// GetString Get字符串
+// GetString retrieves a string value from Redis
+//
+// Parameters:
+//   - key: The key of the string to retrieve
+//
+// Returns:
+//   - string: The retrieved string value
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	str, err := manager.GetString("greeting")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Println(str)
 func (m *Manager) GetString(key string) (string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
@@ -301,77 +483,189 @@ func (m *Manager) GetString(key string) (string, error) {
 	return redis.String(conn.Do("GET", m.prefixKey(key)))
 }
 
-// Get 返回一个指定key的缓存内容
+// Get retrieves a value from Redis and returns it as a byte slice
+//
+// Parameters:
+//   - key: The key of the value to retrieve
+//
+// Returns:
+//   - []byte: The retrieved value as a byte slice
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	data, err := manager.Get("user:1")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	var user User
+//	err = json.Unmarshal(data, &user)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
 func (m *Manager) Get(key string) ([]byte, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Bytes(conn.Do("GET", m.Prefix+key))
-}
-
-func (m *Manager) SetNX(key string, value interface{}, sec int) (bool, error) {
-	rc := m.ConnPool.Get()
-	defer rc.Close()
-	switch sec {
-	case 0:
-		return redis.Bool(rc.Do("SETNX", m.Prefix+key, value))
-	default:
-		reply, err := redis.String(rc.Do("SET", m.Prefix+key, value, "EX", sec, "NX"))
-		if err != nil {
-			if err == redis.ErrNil {
-				return false, nil
-			}
-			return false, err
-		}
-		if reply == "OK" {
-			return true, nil
-		}
-		return false, nil
+	exists, err := redis.Bool(conn.Do("EXISTS", m.prefixKey(key)))
+	if err != nil {
+		return nil, err
 	}
+	if !exists {
+		return nil, redis.ErrNil
+	}
+
+	return redis.Bytes(conn.Do("GET", m.prefixKey(key)))
 }
 
-// Incr 自增
-func (m *Manager) Incr(key string) (value int, err error) {
+// SetNX sets a key-value pair if the key does not already exist
+//
+// Parameters:
+//   - key: The key to set
+//   - value: The value to set
+//   - sec: The expiration time in seconds (0 for no expiration)
+//
+// Returns:
+//   - bool: True if the key was set, false if the key already existed
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	set, err := manager.SetNX("mykey", "myvalue", 3600)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Key was set: %v\n", set)
+func (m *Manager) SetNX(key string, value any, sec int) (bool, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Int(conn.Do("INCR", m.Prefix+key))
+	args := redis.Args{m.prefixKey(key), value}.Add("NX")
+	if sec > 0 {
+		args = args.Add("EX", sec)
+	}
+
+	reply, err := redis.String(conn.Do("SET", args...))
+	if errors.Is(err, redis.ErrNil) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return reply == "OK", nil
 }
 
-// Hset
-// @title   哈希表 key 中的字段 field 值设为 value
-// @author  华正超 (2021/12/16)
-// @param   key | field | member
-// @return  int | error
-func (m *Manager) Hset(key, field, value string) (int, error) {
+// Incr increments the integer value of a key by one
+//
+// Parameters:
+//   - key: The key of the integer to increment
+//
+// Returns:
+//   - int: The new value after incrementing
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	newValue, err := manager.Incr("visitor_count")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("New visitor count: %d\n", newValue)
+func (m *Manager) Incr(key string) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.Int(conn.Do("INCR", m.prefixKey(key)))
 }
 
-func (m *Manager) HGet(key, field string) (string, error) {
+// IncrBy increments the integer value of a key by a specified amount
+//
+// Parameters:
+//   - key: The key of the integer to increment
+//   - value: The amount to increment by
+//
+// Returns:
+//   - int: The new value after incrementing
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	newValue, err := manager.IncrBy("score", 10)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("New score: %d\n", newValue)
+func (m *Manager) IncrBy(key string, value int) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.Int(conn.Do("INCRBY", m.prefixKey(key), value))
 }
 
-func (m *Manager) HExists(key, field string) (bool, error) {
+// Decr decrements the integer value of a key by one
+//
+// Parameters:
+//   - key: The key of the integer to decrement
+//
+// Returns:
+//   - int: The new value after decrementing
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	newValue, err := manager.Decr("stock_count")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Updated stock count: %d\n", newValue)
+func (m *Manager) Decr(key string) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.Int(conn.Do("DECR", m.prefixKey(key)))
 }
 
-func (m *Manager) HIncrBy(key, field string, incr int) (int, error) {
+// DecrBy decrements the integer value of a key by a specified amount
+//
+// Parameters:
+//   - key: The key of the integer to decrement
+//   - value: The amount to decrement by
+//
+// Returns:
+//   - int: The new value after decrementing
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	newValue, err := manager.DecrBy("points", 5)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Updated points: %d\n", newValue)
+func (m *Manager) DecrBy(key string, value int) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.Int(conn.Do("DECRBY", m.prefixKey(key), value))
 }
 
-func (m *Manager) HIncrByFloat(key, field string, incr float64) (float64, error) {
+// HSet sets a field in a Redis hash
+//
+// Parameters:
+//   - key: The key of the hash
+//   - field: The field to set within the hash
+//   - value: The value to set for the field
+//
+// Returns:
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	err := manager.HSet("user:1", "name", "John Doe")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func (m *Manager) HSet(key, field string, value any) error {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
@@ -379,334 +673,743 @@ func (m *Manager) HIncrByFloat(key, field string, incr float64) (float64, error)
 	return err
 }
 
-func (m *Manager) HDel(key, field string) (int, error) {
+// HGet retrieves the value of a field in a Redis hash
+//
+// Parameters:
+//   - key: The key of the hash
+//   - field: The field to retrieve from the hash
+//
+// Returns:
+//   - string: The value of the field
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	value, err := manager.HGet("user:1", "name")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("User name: %s\n", value)
+func (m *Manager) HGet(key, field string) (string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.String(conn.Do("HGET", m.prefixKey(key), field))
 }
 
-// HgetAll
-// @title   获取哈希表 key 的所有 field 和 value
-// @author  华正超 (2021/12/16)
-// @param   key
-// @return  map[string]string | error
-func (m *Manager) HgetAll(key string) (map[string]string, error) {
+// HGetAll retrieves all fields and values in a Redis hash
+//
+// Parameters:
+//   - key: The key of the hash
+//
+// Returns:
+//   - map[string]string: A map of all fields and their values in the hash
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	data, err := manager.HGetAll("user:1")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	for field, value := range data {
+//	    fmt.Printf("%s: %s\n", field, value)
+//	}
+func (m *Manager) HGetAll(key string) (map[string]string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.StringMap(conn.Do("HGETALL", m.prefixKey(key)))
 }
 
-func (m *Manager) HMSet(key string, values ...interface{}) (string, error) {
+// HDel deletes one or more fields from a Redis hash
+//
+// Parameters:
+//   - key: The key of the hash
+//   - fields: One or more fields to delete from the hash
+//
+// Returns:
+//   - int: The number of fields that were removed from the hash
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	removed, err := manager.HDel("user:1", "age", "address")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Number of fields removed: %d\n", removed)
+func (m *Manager) HDel(key string, fields ...any) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	args := make([]interface{}, 1, 1+len(values))
-	args[0] = m.Prefix + key
-	args = appendArg(args, values)
-	return redis.String(conn.Do("HMSET", args...))
+	args := redis.Args{}.Add(m.Prefix + key).AddFlat(fields)
+	return redis.Int(conn.Do("HDEL", args...))
 }
 
-// Hlen
-// @title   获取哈希表字段的数量
-// @author  华正超 (2022/02/07)
-// @param   key
-// @return  int | error
-func (m *Manager) Hlen(key string) (int, error) {
+// ZAdd adds one or more members to a sorted set, or updates the score of existing members
+//
+// Parameters:
+//   - key: The key of the sorted set
+//   - members: One or more ZSetMember structs containing score and member data
+//
+// Returns:
+//   - int: The number of elements added to the sorted set (not including elements already existing for which the score was updated)
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	added, err := manager.ZAdd("leaderboard",
+//	    ZSetMember{Score: 100, Member: "player1"},
+//	    ZSetMember{Score: 200, Member: "player2"})
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Number of new members added: %d\n", added)
+func (m *Manager) ZAdd(key string, members ...ZSetMember) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Int(conn.Do("HLEN", m.Prefix+key))
+	args := redis.Args{}.Add(m.Prefix + key)
+	for _, member := range members {
+		args = args.Add(member.Score).Add(member.Member)
+	}
+
+	return redis.Int(conn.Do("ZADD", args...))
 }
 
-// Zadd
-// @title   添加数据到有序集合
-// @author  华正超 (2021/12/27)
-// @param   key | score | value
-// @return  int | error
-func (m *Manager) Zadd(key, score, value string) (int, error) {
+// ZRem removes one or more members from a sorted set
+//
+// Parameters:
+//   - key: The key of the sorted set
+//   - members: One or more members to remove from the sorted set
+//
+// Returns:
+//   - int: The number of members removed from the sorted set
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	removed, err := manager.ZRem("leaderboard", "player1", "player2")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Number of members removed: %d\n", removed)
+func (m *Manager) ZRem(key string, members ...any) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Int(conn.Do("ZADD", m.Prefix+key, score, value))
+	args := redis.Args{}.Add(m.Prefix + key).AddFlat(members)
+	return redis.Int(conn.Do("ZREM", args...))
 }
 
-// Zrange
-// @title   分值从小到大获取有序集合数据
-// @author  华正超 (2021/12/28)
-// @param   key | start | end
-// @return  []string | error
-func (m *Manager) Zrange(key string, start, end int) (map[string]string, error) {
+// ZRange returns a range of members in a sorted set, by index
+//
+// Parameters:
+//   - key: The key of the sorted set
+//   - start: The starting index
+//   - stop: The ending index
+//
+// Returns:
+//   - []string: A slice of members in the specified range
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	members, err := manager.ZRange("leaderboard", 0, 9)  // Get top 10
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	for i, member := range members {
+//	    fmt.Printf("%d. %s\n", i+1, member)
+//	}
+func (m *Manager) ZRange(key string, start, stop int) ([]string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.Strings(conn.Do("ZRANGE", m.prefixKey(key), start, stop))
 }
 
-// ZRangeByScore zrange by score
-func (m *Manager) ZRangeByScore(key string, start int, end int) ([]ZSetMember, error) {
+// ZRangeWithScores returns a range of members with their scores in a sorted set, by index
+//
+// Parameters:
+//   - key: The key of the sorted set
+//   - start: The starting index
+//   - stop: The ending index
+//
+// Returns:
+//   - []ZSetMember: A slice of ZSetMember structs containing members and their scores in the specified range
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	members, err := manager.ZRangeWithScores("leaderboard", 0, 9)  // Get top 10 with scores
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	for i, member := range members {
+//	    fmt.Printf("%d. %v (Score: %.2f)\n", i+1, member.Member, member.Score)
+//	}
+func (m *Manager) ZRangeWithScores(key string, start, stop int) ([]ZSetMember, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	origin, err := conn.Do("ZRANGE", m.Prefix+key, start, end, "withscores")
+	values, err := redis.Values(conn.Do("ZRANGE", m.prefixKey(key), start, stop, "WITHSCORES"))
 	if err != nil {
 		return nil, err
 	}
 
-	items := origin.([]interface{})
-	result := make([]ZSetMember, len(items)/2)
-
-	for i := 0; i < len(items); i++ {
-		if i%2 == 0 && (i+1) < len(items) {
-			origin := BytesToString(items[i+1].([]byte))
-			score, _ := strconv.ParseFloat(origin, 64)
-
-			result[i/2] = ZSetMember{
-				Score:  score,
-				Member: string(items[i].([]byte)),
-			}
+	var members []ZSetMember
+	for i := 0; i < len(values); i += 2 {
+		score, err := strconv.ParseFloat(string(values[i+1].([]byte)), 64)
+		if err != nil {
+			return nil, err
 		}
+		members = append(members, ZSetMember{
+			Score:  score,
+			Member: string(values[i].([]byte)),
+		})
 	}
-	return result, nil
+
+	return members, nil
 }
 
-func (m *Manager) ZRangeByScoreWithScores(key, start, end string, offset, count int) (map[string]string, error) {
+// ZRevRange returns a range of members in a sorted set, by index, with scores ordered from high to low
+//
+// Parameters:
+//   - key: The key of the sorted set
+//   - start: The starting index
+//   - stop: The ending index
+//
+// Returns:
+//   - []string: A slice of members in the specified range, ordered from high to low score
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	members, err := manager.ZRevRange("leaderboard", 0, 9)  // Get top 10 in reverse order
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	for i, member := range members {
+//	    fmt.Printf("%d. %s\n", i+1, member)
+//	}
+func (m *Manager) ZRevRange(key string, start, stop int) ([]string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.Strings(conn.Do("ZREVRANGE", m.prefixKey(key), start, stop))
 }
 
-// Zrevrange
-// @title   分值从大到小获取有序集合数据
-// @author  华正超 (2021/12/28)
-// @param   key | start | end
-// @return  []string | error
-func (m *Manager) Zrevrange(key string, start, end int) (map[string]string, error) {
+// ZRevRangeWithScores returns a range of members with their scores in a sorted set, by index, with scores ordered from high to low
+//
+// Parameters:
+//   - key: The key of the sorted set
+//   - start: The starting index
+//   - stop: The ending index
+//
+// Returns:
+//   - []ZSetMember: A slice of ZSetMember structs containing members and their scores in the specified range, ordered from high to low score
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	members, err := manager.ZRevRangeWithScores("leaderboard", 0, 9)  // Get top 10 with scores in reverse order
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	for i, member := range members {
+//	    fmt.Printf("%d. %v (Score: %.2f)\n", i+1, member.Member, member.Score)
+//	}
+func (m *Manager) ZRevRangeWithScores(key string, start, stop int) ([]ZSetMember, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.StringMap(conn.Do("ZREVRANGE", m.Prefix+key, start, end, "withscores"))
-}
-
-func (m *Manager) ZRevRangeByScoreWithScores(key, start, end string, offset, count int) (map[string]string, error) {
-	conn := m.ConnPool.Get()
-	defer conn.Close()
-
-	return redis.StringMap(conn.Do("ZREVRANGEBYSCORE", m.Prefix+key, start, end, "WITHSCORES", "limit", offset, count))
-}
-
-// ZrevrangeResArr @title   分值从大到小获取有序集合数据 - 返回数组
-// @author  闫江浩 (2022/02/16)
-// @param   key | start | end
-// @return  []string | error
-func (m *Manager) ZrevrangeResArr(key string, start, end int) ([]string, []string, error) {
-	conn := m.ConnPool.Get()
-	defer conn.Close()
-
-	valArr := make([]string, 0)
-	scoreArr := make([]string, 0)
-	zrangeRes, err := conn.Do("ZREVRANGE", m.Prefix+key, start, end, "withscores")
+	values, err := redis.Values(conn.Do("ZREVRANGE", m.prefixKey(key), start, stop, "WITHSCORES"))
 	if err != nil {
-		return valArr, scoreArr, err
+		return nil, err
 	}
-	itemArr := zrangeRes.([]interface{})
-	for i := 0; i < len(itemArr); i++ {
-		if i%2 == 0 && (i+1) < len(itemArr) {
-			score := string(itemArr[i+1].([]byte))
-			valArr = append(valArr, string(itemArr[i].([]byte)))
-			scoreArr = append(scoreArr, score)
+
+	var members []ZSetMember
+	for i := 0; i < len(values); i += 2 {
+		score, err := strconv.ParseFloat(string(values[i+1].([]byte)), 64)
+		if err != nil {
+			return nil, err
 		}
+		members = append(members, ZSetMember{
+			Score:  score,
+			Member: string(values[i].([]byte)),
+		})
 	}
-	return valArr, scoreArr, nil
+
+	return members, nil
 }
 
-// Zcard
-// @title   获取有序集合成员数
-// @author  华正超 (2021/12/28)
-// @param   key | start | end
-// @return  int | error
-func (m *Manager) Zcard(key string) (int, error) {
+// ZCard returns the number of members in a sorted set
+//
+// Parameters:
+//   - key: The key of the sorted set
+//
+// Returns:
+//   - int: The number of members in the sorted set
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	count, err := manager.ZCard("leaderboard")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Number of members in leaderboard: %d\n", count)
+func (m *Manager) ZCard(key string) (int, error) {
+	conn := m.ConnPool.Get()
+	defer conn.Close()
+
+	return redis.Int(conn.Do("ZCARD", m.prefixKey(key)))
+}
+
+// ZScore returns the score of a member in a sorted set
+//
+// Parameters:
+//   - key: The key of the sorted set
+//   - member: The member whose score to retrieve
+//
+// Returns:
+//   - float64: The score of the member
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	score, err := manager.ZScore("leaderboard", "player1")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Score of player1: %.2f\n", score)
+func (m *Manager) ZScore(key string, member string) (float64, error) {
+	conn := m.ConnPool.Get()
+	defer conn.Close()
+
+	return redis.Float64(conn.Do("ZSCORE", m.prefixKey(key), member))
+}
+
+// ZRank returns the rank of a member in a sorted set, with scores ordered from low to high
+//
+// Parameters:
+//   - key: The key of the sorted set
+//   - member: The member whose rank to retrieve
+//
+// Returns:
+//   - int: The rank of the member (0-based)
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	rank, err := manager.ZRank("leaderboard", "player1")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Rank of player1: %d\n", rank)
+func (m *Manager) ZRank(key string, member string) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.Int(conn.Do("ZRANK", m.prefixKey(key), member))
 }
 
-// Zincrby
-// @title   增加有序集合指定成员分数
-// @author  华正超 (2021/12/28)
-// @param   key | score | member
-// @return  int | error
-func (m *Manager) Zincrby(key string, score int, member string) (int, error) {
+// ZRevRank returns the rank of a member in a sorted set, with scores ordered from high to low
+//
+// Parameters:
+//   - key: The key of the sorted set
+//   - member: The member whose rank to retrieve
+//
+// Returns:
+//   - int: The rank of the member (0-based)
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	rank, err := manager.ZRevRank("leaderboard", "player1")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Reverse rank of player1: %d\n", rank)
+func (m *Manager) ZRevRank(key string, member string) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.Int(conn.Do("ZREVRANK", m.prefixKey(key), member))
 }
 
-// Zscore
-// @title   获取有序集合成员分数值
-// @author  华正超 (2021/12/09)
-// @param   key | member
-// @return  int | error
-func (m *Manager) Zscore(key, member string) (int, error) {
+// SAdd adds one or more members to a set
+//
+// Parameters:
+//   - key: The key of the set
+//   - members: One or more members to add to the set
+//
+// Returns:
+//   - int: The number of members that were added to the set (not including members already present)
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	added, err := manager.SAdd("myset", "member1", "member2", "member3")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Number of new members added: %d\n", added)
+func (m *Manager) SAdd(key string, members ...any) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Int(conn.Do("ZSCORE", m.Prefix+key, member))
+	args := redis.Args{}.Add(m.Prefix + key).AddFlat(members)
+	return redis.Int(conn.Do("SADD", args...))
 }
 
-// Zrank 返回有序集中指定成员的排名。其中有序集成员按分数值递增(从小到大)顺序排列。
-func (m *Manager) Zrank(key, member string) (map[string]string, error) {
+// SRem removes one or more members from a set
+//
+// Parameters:
+//   - key: The key of the set
+//   - members: One or more members to remove from the set
+//
+// Returns:
+//   - int: The number of members that were removed from the set
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	removed, err := manager.SRem("myset", "member1", "member2")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Number of members removed: %d\n", removed)
+func (m *Manager) SRem(key string, members ...any) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
-	return redis.StringMap(conn.Do("ZRANK", m.Prefix+key, member))
+
+	args := redis.Args{}.Add(m.Prefix + key).AddFlat(members)
+	return redis.Int(conn.Do("SREM", args...))
 }
 
-// Zrem 移除有序集中的一个或多个成员，不存在的成员将被忽略.
-func (m *Manager) Zrem(key, member string) (bool, error) {
+// SMembers returns all members of a set
+//
+// Parameters:
+//   - key: The key of the set
+//
+// Returns:
+//   - []string: A slice containing all members of the set
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	members, err := manager.SMembers("myset")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Println("Set members:", members)
+func (m *Manager) SMembers(key string) ([]string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.Strings(conn.Do("SMEMBERS", m.prefixKey(key)))
 }
 
-// Lrange 返回一个指定list的缓存内容
-func (m *Manager) Lrange(key string) ([]string, error) {
+// SCard returns the number of members in a set
+//
+// Parameters:
+//   - key: The key of the set
+//
+// Returns:
+//   - int: The number of members in the set
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	count, err := manager.SCard("myset")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Number of members in set: %d\n", count)
+func (m *Manager) SCard(key string) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.Int(conn.Do("SCARD", m.prefixKey(key)))
 }
 
-// Lpush 向指定list的添加内容
-func (m *Manager) Lpush(key string, value interface{}) (bool, error) {
+// SIsMember checks if a value is a member of a set
+//
+// Parameters:
+//   - key: The key of the set
+//   - member: The member to check for
+//
+// Returns:
+//   - bool: true if the member exists in the set, false otherwise
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	isMember, err := manager.SIsMember("myset", "member1")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	if isMember {
+//	    fmt.Println("member1 is in the set")
+//	} else {
+//	    fmt.Println("member1 is not in the set")
+//	}
+func (m *Manager) SIsMember(key string, member any) (bool, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.Bool(conn.Do("SISMEMBER", m.prefixKey(key), member))
 }
 
-// Lpop 向指定list的获取内容
-func (m *Manager) Lpop(key string) (string, error) {
+// SPop removes and returns a random member from a set
+//
+// Parameters:
+//   - key: The key of the set
+//
+// Returns:
+//   - string: The removed member
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	member, err := manager.SPop("myset")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Removed member: %s\n", member)
+func (m *Manager) SPop(key string) (string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.String(conn.Do("SPOP", m.prefixKey(key)))
 }
 
-// Llen 向指定list获取数量
-func (m *Manager) Llen(key string) (int, error) {
+// SRandMember returns a random member from a set
+//
+// Parameters:
+//   - key: The key of the set
+//
+// Returns:
+//   - string: A random member from the set
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	member, err := manager.SRandMember("myset")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Random member: %s\n", member)
+func (m *Manager) SRandMember(key string) (string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	return redis.String(conn.Do("SRANDMEMBER", m.prefixKey(key)))
 }
 
-func (m *Manager) SAdd(key string, values interface{}) (value int, err error) {
-	rc := m.ConnPool.Get()
-	defer rc.Close()
-	value, err = redis.Int(rc.Do("SADD", m.Prefix+key, values))
-	return
+// Publish publishes a message to a channel
+//
+// Parameters:
+//   - channel: The channel to publish to
+//   - message: The message to publish
+//
+// Returns:
+//   - int: The number of clients that received the message
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	receivers, err := manager.Publish("mychannel", "Hello, subscribers!")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	fmt.Printf("Message sent to %d subscribers\n", receivers)
+func (m *Manager) Publish(channel string, message any) (int, error) {
+	conn := m.ConnPool.Get()
+	defer conn.Close()
+
+	return redis.Int(conn.Do("PUBLISH", m.Prefix+channel, message))
 }
 
-func (m *Manager) SCard(key string) (value int, err error) {
-	rc := m.ConnPool.Get()
-	defer rc.Close()
-	value, err = redis.Int(rc.Do("SCARD", m.Prefix+key))
-	return
-}
+// Subscribe subscribes to one or more channels
+//
+// Parameters:
+//   - channels: One or more channels to subscribe to
+//
+// Returns:
+//   - *redis.PubSubConn: A new publish/subscribe connection
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	psc, err := manager.Subscribe("channel1", "channel2")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer psc.Close()
+//
+//	for {
+//	    switch v := psc.Receive().(type) {
+//	    case redis.Message:
+//	        fmt.Printf("%s: message: %s\n", v.Channel, v.Data)
+//	    case redis.Subscription:
+//	        fmt.Printf("%s: %s %d\n", v.Channel, v.Kind, v.Count)
+//	    case error:
+//	        return v
+//	    }
+//	}
+func (m *Manager) Subscribe(channels ...any) (*redis.PubSubConn, error) {
+	conn := m.ConnPool.Get()
 
-func (m *Manager) SMembers(key string) (value []string, err error) {
-	rc := m.ConnPool.Get()
-	defer rc.Close()
-	value, err = redis.Strings(rc.Do("SMEMBERS", m.Prefix+key))
-	return
-}
-
-func (m *Manager) SUnion(key []string) ([]string, error) {
-	rc := m.ConnPool.Get()
-	defer func(rc redis.Conn) {
-		_ = rc.Close()
-	}(rc)
-	args := make([]interface{}, len(key))
-	for k, v := range key {
-		args[k] = m.Prefix + v
+	psc := &redis.PubSubConn{Conn: conn}
+	prefixedChannels := make([]any, len(channels))
+	for i, ch := range channels {
+		prefixedChannels[i] = m.Prefix + ch.(string)
 	}
-	return redis.Strings(rc.Do("SUNION", args...))
-}
 
-func (m *Manager) SInter(key []string) ([]string, error) {
-	rc := m.ConnPool.Get()
-	defer func(rc redis.Conn) {
-		_ = rc.Close()
-	}(rc)
-	args := make([]interface{}, len(key))
-	for k, v := range key {
-		args[k] = m.Prefix + v
+	err := psc.Subscribe(prefixedChannels...)
+	if err != nil {
+		conn.Close()
+		return nil, err
 	}
-	return redis.Strings(rc.Do("SINTER", args...))
+
+	return psc, nil
 }
 
-func (m *Manager) SRem(key string, members ...interface{}) (int, error) {
-	rc := m.ConnPool.Get()
-	defer func(rc redis.Conn) {
-		_ = rc.Close()
-	}(rc)
-	args := make([]interface{}, 1, 1+len(members))
-	args[0] = m.Prefix + key
-	args = appendArg(args, members)
+// PSubscribe subscribes to one or more channels using patterns
+//
+// Parameters:
+//   - patterns: One or more patterns to subscribe to
+//
+// Returns:
+//   - *redis.PubSubConn: A new publish/subscribe connection
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	psc, err := manager.PSubscribe("channel*", "user.*")
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer psc.Close()
+//
+//	for {
+//	    switch v := psc.Receive().(type) {
+//	    case redis.PMessage:
+//	        fmt.Printf("%s: message: %s (pattern: %s)\n", v.Channel, v.Data, v.Pattern)
+//	    case redis.Subscription:
+//	        fmt.Printf("%s: %s %d\n", v.Channel, v.Kind, v.Count)
+//	    case error:
+//	        return v
+//	    }
+//	}
+func (m *Manager) PSubscribe(patterns ...any) (*redis.PubSubConn, error) {
+	conn := m.ConnPool.Get()
 
-	return redis.Int(rc.Do("SREM", args...))
-}
-
-func (m *Manager) SIsMember(key string, member interface{}) (bool, error) {
-	rc := m.ConnPool.Get()
-	defer func(rc redis.Conn) {
-		_ = rc.Close()
-	}(rc)
-	return redis.Bool(rc.Do("SISMEMBER", m.Prefix+key, member))
-}
-
-func (m *Manager) SPop(key string) (string, error) {
-	rc := m.ConnPool.Get()
-	defer func(rc redis.Conn) {
-		_ = rc.Close()
-	}(rc)
-	return redis.String(rc.Do("SPOP", m.Prefix+key))
-}
-
-func appendArg(dst []interface{}, arg interface{}) []interface{} {
-	switch arg := arg.(type) {
-	case []string:
-		for _, s := range arg {
-			dst = append(dst, s)
-		}
-		return dst
-	case []interface{}:
-		dst = append(dst, arg...)
-		return dst
-	case map[string]interface{}:
-		for k, v := range arg {
-			dst = append(dst, k, v)
-		}
-		return dst
-	case map[string]string:
-		for k, v := range arg {
-			dst = append(dst, k, v)
-		}
-		return dst
-	default:
-		return append(dst, arg)
+	psc := &redis.PubSubConn{Conn: conn}
+	prefixedPatterns := make([]any, len(patterns))
+	for i, p := range patterns {
+		prefixedPatterns[i] = m.Prefix + p.(string)
 	}
+
+	err := psc.PSubscribe(prefixedPatterns...)
+	if err != nil {
+		conn.Close()
+		return nil, err
+	}
+
+	return psc, nil
 }
 
-func usePrecise(dur time.Duration) bool {
-	return dur < time.Second || dur%time.Second != 0
+// SetJSON serializes the given value to JSON and stores it in Redis under the specified key.
+//
+// Parameters:
+//   - key: The key under which to store the JSON data in Redis
+//   - value: The value to be serialized to JSON and stored
+//   - expiration: The expiration time for the key in seconds. Use 0 for no expiration.
+//
+// Returns:
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	type User struct {
+//	    Name  string
+//	    Email string
+//	}
+//	user := User{Name: "John Doe", Email: "john@example.com"}
+//	err := manager.SetJSON("user:1", user, 3600) // Expire in 1 hour
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+func (m *Manager) SetJSON(key string, value any, expiration int) error {
+	conn := m.ConnPool.Get()
+	defer conn.Close()
+
+	jsonData, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+
+	if expiration > 0 {
+		_, err = conn.Do("SETEX", m.Prefix+key, expiration, jsonData)
+	} else {
+		_, err = conn.Do("SET", m.Prefix+key, jsonData)
+	}
+
+	return err
 }
 
-func BytesToString(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
+// GetJSON retrieves JSON data from Redis for the specified key and unmarshal it into the provided value.
+//
+// Parameters:
+//   - key: The key from which to retrieve the JSON data in Redis
+//   - value: A pointer to the value where the unmarshalled JSON data will be stored
+//
+// Returns:
+//   - bool: True if the key exists and the data was successfully retrieved and unmarshalled, false otherwise
+//   - error: Any error that occurred during the operation
+//
+// Example:
+//
+//	var user struct {
+//	    Name  string
+//	    Email string
+//	}
+//	exists, err := manager.GetJSON("user:1", &user)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	if exists {
+//	    fmt.Printf("Retrieved user: %+v\n", user)
+//	} else {
+//	    fmt.Println("User not found")
+//	}
+func (m *Manager) GetJSON(key string, value any) (bool, error) {
+	conn := m.ConnPool.Get()
+	defer conn.Close()
+
+	reply, err := conn.Do("GET", m.Prefix+key)
+	if err != nil {
+		return false, err
+	}
+
+	if reply == nil {
+		return false, nil
+	}
+
+	jsonData, err := redis.Bytes(reply, err)
+	if err != nil {
+		return false, err
+	}
+
+	err = json.Unmarshal(jsonData, value)
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
 }
