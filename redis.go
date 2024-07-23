@@ -159,6 +159,17 @@ func New(opts ...Option) (*Manager, error) {
 	return m, err
 }
 
+// prefixKey adds the key prefix to the given key
+//
+// Parameters:
+//   - key: The key to prefix
+//
+// Returns:
+//   - string: The prefixed key
+func (m *Manager) prefixKey(key string) string {
+	return m.Prefix + key
+}
+
 // Ping sends a PING command to the Redis server and returns an error if the connection fails
 // Returns:
 //   - error: Any error that occurred during the PING command
@@ -196,7 +207,7 @@ func (m *Manager) Exists(key string) (bool, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Bool(conn.Do("EXISTS", m.Prefix+key))
+	return redis.Bool(conn.Do("EXISTS", m.prefixKey(key)))
 }
 
 // Del 返回删除一个指定key的结果
@@ -204,7 +215,7 @@ func (m *Manager) Del(key string) (bool, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Bool(conn.Do("DEL", m.Prefix+key))
+	return redis.Bool(conn.Do("DEL", m.prefixKey(key)))
 }
 
 // BatchDel 批量删除指定key相关键的所有内容
@@ -234,7 +245,7 @@ func (m *Manager) Ttl(key string) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Int(conn.Do("TTL", m.Prefix+key))
+	return redis.Int(conn.Do("TTL", m.prefixKey(key)))
 }
 
 // Expire 设置指定key的过期时间
@@ -242,7 +253,7 @@ func (m *Manager) Expire(key string, ttl int) error {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	_, err := conn.Do("EXPIRE", m.Prefix+key, ttl)
+	_, err := conn.Do("EXPIRE", m.prefixKey(key), ttl)
 
 	return err
 }
@@ -257,9 +268,9 @@ func (m *Manager) Set(key string, data interface{}, ttl int) error {
 		return err
 	}
 	if ttl > 0 {
-		_, err = conn.Do("SET", m.Prefix+key, value, "EX", ttl)
+		_, err = conn.Do("SET", m.prefixKey(key), data, "EX", ttl)
 	} else {
-		_, err = conn.Do("SET", m.Prefix+key, value)
+		_, err = conn.Do("SET", m.prefixKey(key), data)
 	}
 
 	return err
@@ -269,11 +280,11 @@ func (m *Manager) Set(key string, data interface{}, ttl int) error {
 func (m *Manager) SetString(key string, str string, ttl int) error {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
-	var err error
+
 	if ttl > 0 {
-		_, err = conn.Do("SET", m.Prefix+key, str, "EX", ttl)
+		_, err = conn.Do("SET", m.prefixKey(key), str, "EX", ttl)
 	} else {
-		_, err = conn.Do("SET", m.Prefix+key, str)
+		_, err = conn.Do("SET", m.prefixKey(key), str)
 	}
 
 	return err
@@ -283,11 +294,11 @@ func (m *Manager) SetString(key string, str string, ttl int) error {
 func (m *Manager) GetString(key string) (string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
-	exist, err := redis.Bool(conn.Do("EXISTS", m.Prefix+key))
+	exist, err := redis.Bool(conn.Do("EXISTS", m.prefixKey(key)))
 	if !exist || err != nil {
 		return "", err
 	}
-	return redis.String(conn.Do("GET", m.Prefix+key))
+	return redis.String(conn.Do("GET", m.prefixKey(key)))
 }
 
 // Get 返回一个指定key的缓存内容
@@ -336,42 +347,43 @@ func (m *Manager) Hset(key, field, value string) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Int(conn.Do("HSET", m.Prefix+key, field, value))
+	return redis.Int(conn.Do("INCR", m.prefixKey(key)))
 }
 
 func (m *Manager) HGet(key, field string) (string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.String(conn.Do("HGET", m.Prefix+key, field))
+	return redis.Int(conn.Do("INCRBY", m.prefixKey(key), value))
 }
 
 func (m *Manager) HExists(key, field string) (bool, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Bool(conn.Do("HEXISTS", m.Prefix+key, field))
+	return redis.Int(conn.Do("DECR", m.prefixKey(key)))
 }
 
 func (m *Manager) HIncrBy(key, field string, incr int) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Int(conn.Do("HINCRBY", m.Prefix+key, field, incr))
+	return redis.Int(conn.Do("DECRBY", m.prefixKey(key), value))
 }
 
 func (m *Manager) HIncrByFloat(key, field string, incr float64) (float64, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Float64(conn.Do("HINCRBYFLOAT", m.Prefix+key, field, incr))
+	_, err := conn.Do("HSET", m.prefixKey(key), field, value)
+	return err
 }
 
 func (m *Manager) HDel(key, field string) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Int(conn.Do("HDEL", m.Prefix+key, field))
+	return redis.String(conn.Do("HGET", m.prefixKey(key), field))
 }
 
 // HgetAll
@@ -383,7 +395,7 @@ func (m *Manager) HgetAll(key string) (map[string]string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.StringMap(conn.Do("HGETALL", m.Prefix+key))
+	return redis.StringMap(conn.Do("HGETALL", m.prefixKey(key)))
 }
 
 func (m *Manager) HMSet(key string, values ...interface{}) (string, error) {
@@ -429,7 +441,7 @@ func (m *Manager) Zrange(key string, start, end int) (map[string]string, error) 
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.StringMap(conn.Do("ZRANGE", m.Prefix+key, start, end, "withscores"))
+	return redis.Strings(conn.Do("ZRANGE", m.prefixKey(key), start, stop))
 }
 
 // ZRangeByScore zrange by score
@@ -463,7 +475,7 @@ func (m *Manager) ZRangeByScoreWithScores(key, start, end string, offset, count 
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.StringMap(conn.Do("ZRANGEBYSCORE", m.Prefix+key, start, end, "WITHSCORES", "limit", offset, count))
+	return redis.Strings(conn.Do("ZREVRANGE", m.prefixKey(key), start, stop))
 }
 
 // Zrevrange
@@ -519,7 +531,7 @@ func (m *Manager) Zcard(key string) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Int(conn.Do("ZCARD", m.Prefix+key))
+	return redis.Int(conn.Do("ZRANK", m.prefixKey(key), member))
 }
 
 // Zincrby
@@ -531,7 +543,7 @@ func (m *Manager) Zincrby(key string, score int, member string) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Int(conn.Do("ZINCRBY", m.Prefix+key, score, member))
+	return redis.Int(conn.Do("ZREVRANK", m.prefixKey(key), member))
 }
 
 // Zscore
@@ -557,7 +569,8 @@ func (m *Manager) Zrank(key, member string) (map[string]string, error) {
 func (m *Manager) Zrem(key, member string) (bool, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
-	return redis.Bool(conn.Do("ZREM", m.Prefix+key, member))
+
+	return redis.Strings(conn.Do("SMEMBERS", m.prefixKey(key)))
 }
 
 // Lrange 返回一个指定list的缓存内容
@@ -565,7 +578,7 @@ func (m *Manager) Lrange(key string) ([]string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Strings(conn.Do("LRANGE", m.Prefix+key, 0, -1))
+	return redis.Int(conn.Do("SCARD", m.prefixKey(key)))
 }
 
 // Lpush 向指定list的添加内容
@@ -573,7 +586,7 @@ func (m *Manager) Lpush(key string, value interface{}) (bool, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Bool(conn.Do("LPUSH", m.Prefix+key, value))
+	return redis.Bool(conn.Do("SISMEMBER", m.prefixKey(key), member))
 }
 
 // Lpop 向指定list的获取内容
@@ -581,7 +594,7 @@ func (m *Manager) Lpop(key string) (string, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.String(conn.Do("LPOP", m.Prefix+key))
+	return redis.String(conn.Do("SPOP", m.prefixKey(key)))
 }
 
 // Llen 向指定list获取数量
@@ -589,7 +602,7 @@ func (m *Manager) Llen(key string) (int, error) {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
-	return redis.Int(conn.Do("LLEN", m.Prefix+key))
+	return redis.String(conn.Do("SRANDMEMBER", m.prefixKey(key)))
 }
 
 func (m *Manager) SAdd(key string, values interface{}) (value int, err error) {
