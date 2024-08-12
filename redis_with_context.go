@@ -57,8 +57,9 @@ func (m *Manager) DoWithContext(ctx context.Context, commandName string, args ..
 //
 // Example:
 //
+//	ctx := context.Background()
 //	script := `return redis.call('SET', KEYS[1], ARGV[1])`
-//	result, err := manager.Lua(1, script, []string{"mykey", "myvalue"})
+//	result, err := manager.LuaWithContext(ctx, 1, script, []string{"mykey", "myvalue"})
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -87,7 +88,8 @@ func (m *Manager) LuaWithContext(ctx context.Context, keyCount int, script strin
 //
 // Example:
 //
-//	exists, err := manager.Exists("mykey")
+//	ctx := context.Background()
+//	exists, err := manager.ExistsWithContext(ctx, "mykey")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -114,7 +116,8 @@ func (m *Manager) ExistsWithContext(ctx context.Context, key string) (bool, erro
 //
 // Example:
 //
-//	deleted, err := manager.Del("mykey")
+//	ctx := context.Background()
+//	deleted, err := manager.DelWithContext(ctx, "mykey")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -153,7 +156,8 @@ func (m *Manager) DelWithContext(ctx context.Context, key string) (bool, error) 
 //
 // Example:
 //
-//	err := manager.BatchDel("user:*")
+//	ctx := context.Background()
+//	err := manager.BatchDelWithContext(ctx, "user:*")
 //	if err != nil {
 //	    log.Printf("Failed to batch delete: %v", err)
 //	}
@@ -210,7 +214,8 @@ func (m *Manager) BatchDelWithContext(ctx context.Context, pattern string) error
 //
 // Example:
 //
-//	ttl, err := manager.Ttl("mykey")
+//	ctx := context.Background()
+//	ttl, err := manager.TtlWithContext(ctx, "mykey")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -237,7 +242,8 @@ func (m *Manager) TtlWithContext(ctx context.Context, key string) (int, error) {
 //
 // Example:
 //
-//	err := manager.Expire("mykey", 3600) // Expire in 1 hour
+//	ctx := context.Background()
+//	err := manager.ExpireWithContext(ctx, "mykey", 3600) // Expire in 1 hour
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -266,7 +272,8 @@ func (m *Manager) ExpireWithContext(ctx context.Context, key string, ttl int) er
 //
 // Example:
 //
-//	err := manager.Set("user:1", User{Name: "John", Age: 30}, 3600)
+//	ctx := context.Background()
+//	err := manager.SetWithContext(ctx, "user:1", User{Name: "John", Age: 30}, 3600)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -299,7 +306,8 @@ func (m *Manager) SetWithContext(ctx context.Context, key string, data any, ttl 
 //
 // Example:
 //
-//	err := manager.SetString("greeting", "Hello, World!", 3600)
+//	ctx := context.Background()
+//	err := manager.SetStringWithContext(ctx, "greeting", "Hello, World!", 3600)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -331,7 +339,8 @@ func (m *Manager) SetStringWithContext(ctx context.Context, key string, str stri
 //
 // Example:
 //
-//	str, err := manager.GetString("greeting")
+//	ctx := context.Background()
+//	str, err := manager.GetStringWithContext(ctx, "greeting")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -361,7 +370,8 @@ func (m *Manager) GetStringWithContext(ctx context.Context, key string) (string,
 //
 // Example:
 //
-//	data, err := manager.Get("user:1")
+//	ctx := context.Background()
+//	data, err := manager.GetWithContext(ctx, "user:1")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -402,7 +412,8 @@ func (m *Manager) GetWithContext(ctx context.Context, key string) ([]byte, error
 //
 // Example:
 //
-//	set, err := manager.SetNX("mykey", "myvalue", 3600)
+//	ctx := context.Background()
+//	set, err := manager.SetNXWithContext(ctx, "mykey", "myvalue", 3600)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -441,7 +452,8 @@ func (m *Manager) SetNXWithContext(ctx context.Context, key string, value any, s
 //
 // Example:
 //
-//	newValue, err := manager.Incr("visitor_count")
+//	ctx := context.Background()
+//	newValue, err := manager.IncrWithContext(ctx, "visitor_count")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -469,7 +481,8 @@ func (m *Manager) IncrWithContext(ctx context.Context, key string) (int, error) 
 //
 // Example:
 //
-//	newValue, err := manager.IncrBy("score", 10)
+//	ctx := context.Background()
+//	newValue, err := manager.IncrByWithContext(ctx, "score", 10)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -496,7 +509,8 @@ func (m *Manager) IncrByWithContext(ctx context.Context, key string, value int) 
 //
 // Example:
 //
-//	newValue, err := manager.Decr("stock_count")
+//	ctx := context.Background()
+//	newValue, err := manager.DecrWithContext(ctx, "stock_count")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -524,7 +538,8 @@ func (m *Manager) DecrWithContext(ctx context.Context, key string) (int, error) 
 //
 // Example:
 //
-//	newValue, err := manager.DecrBy("points", 5)
+//	ctx := context.Background()
+//	newValue, err := manager.DecrByWithContext(ctx, "points", 5)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -552,7 +567,8 @@ func (m *Manager) DecrByWithContext(ctx context.Context, key string, value int) 
 //
 // Example:
 //
-//	err := manager.HSet("user:1", "name", "John Doe")
+//	ctx := context.Background()
+//	err := manager.HSetWithContext(ctx, "user:1", "name", "John Doe")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -580,7 +596,8 @@ func (m *Manager) HSetWithContext(ctx context.Context, key, field string, value 
 //
 // Example:
 //
-//	value, err := manager.HGet("user:1", "name")
+//	ctx := context.Background()
+//	value, err := manager.HGetWithContext(ctx, "user:1", "name")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -607,7 +624,8 @@ func (m *Manager) HGetWithContext(ctx context.Context, key, field string) (strin
 //
 // Example:
 //
-//	data, err := manager.HGetAll("user:1")
+//	ctx := context.Background()
+//	data, err := manager.HGetAllWithContext(ctx, "user:1")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -637,7 +655,8 @@ func (m *Manager) HGetAllWithContext(ctx context.Context, key string) (map[strin
 //
 // Example:
 //
-//	removed, err := manager.HDel("user:1", "age", "address")
+//	ctx := context.Background()
+//	removed, err := manager.HDelWithContext(ctx, "user:1", "age", "address")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -666,7 +685,8 @@ func (m *Manager) HDelWithContext(ctx context.Context, key string, fields ...any
 //
 // Example:
 //
-//	added, err := manager.ZAdd("leaderboard",
+//	ctx := context.Background()
+//	added, err := manager.ZAddWithContext(ctx, "leaderboard",
 //	    ZSetMember{Score: 100, Member: "player1"},
 //	    ZSetMember{Score: 200, Member: "player2"})
 //	if err != nil {
@@ -701,7 +721,8 @@ func (m *Manager) ZAddWithContext(ctx context.Context, key string, members ...ZS
 //
 // Example:
 //
-//	removed, err := manager.ZRem("leaderboard", "player1", "player2")
+//	ctx := context.Background()
+//	removed, err := manager.ZRemWithContext(ctx, "leaderboard", "player1", "player2")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -731,7 +752,8 @@ func (m *Manager) ZRemWithContext(ctx context.Context, key string, members ...an
 //
 // Example:
 //
-//	members, err := manager.ZRange("leaderboard", 0, 9)  // Get top 10
+//	ctx := context.Background()
+//	members, err := manager.ZRangeWithContext(ctx, "leaderboard", 0, 9)  // Get top 10
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -762,7 +784,8 @@ func (m *Manager) ZRangeWithContext(ctx context.Context, key string, start, stop
 //
 // Example:
 //
-//	members, err := manager.ZRangeWithScores("leaderboard", 0, 9)  // Get top 10 with scores
+//	ctx := context.Background()
+//	members, err := manager.ZRangeWithScoresWithContext(ctx, "leaderboard", 0, 9)  // Get top 10 with scores
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -810,7 +833,8 @@ func (m *Manager) ZRangeWithScoresWithContext(ctx context.Context, key string, s
 //
 // Example:
 //
-//	members, err := manager.ZRevRange("leaderboard", 0, 9)  // Get top 10 in reverse order
+//	ctx := context.Background()
+//	members, err := manager.ZRevRangeWithContext(ctx, "leaderboard", 0, 9)  // Get top 10 in reverse order
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -841,7 +865,8 @@ func (m *Manager) ZRevRangeWithContext(ctx context.Context, key string, start, s
 //
 // Example:
 //
-//	members, err := manager.ZRevRangeWithScores("leaderboard", 0, 9)  // Get top 10 with scores in reverse order
+//	ctx := context.Background()
+//	members, err := manager.ZRevRangeWithScoresWithContext(ctx, "leaderboard", 0, 9)  // Get top 10 with scores in reverse order
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -887,7 +912,8 @@ func (m *Manager) ZRevRangeWithScoresWithContext(ctx context.Context, key string
 //
 // Example:
 //
-//	count, err := manager.ZCard("leaderboard")
+//	ctx := context.Background()
+//	count, err := manager.ZCardWithContext(ctx, "leaderboard")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -915,7 +941,8 @@ func (m *Manager) ZCardWithContext(ctx context.Context, key string) (int, error)
 //
 // Example:
 //
-//	score, err := manager.ZScore("leaderboard", "player1")
+//	ctx := context.Background()
+//	score, err := manager.ZScoreWithContext(ctx, "leaderboard", "player1")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -943,7 +970,8 @@ func (m *Manager) ZScoreWithContext(ctx context.Context, key string, member stri
 //
 // Example:
 //
-//	rank, err := manager.ZRank("leaderboard", "player1")
+//	ctx := context.Background()
+//	rank, err := manager.ZRankWithContext(ctx, "leaderboard", "player1")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -971,7 +999,8 @@ func (m *Manager) ZRankWithContext(ctx context.Context, key string, member strin
 //
 // Example:
 //
-//	rank, err := manager.ZRevRank("leaderboard", "player1")
+//	ctx := context.Background()
+//	rank, err := manager.ZRevRankWithContext(ctx, "leaderboard", "player1")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -999,7 +1028,8 @@ func (m *Manager) ZRevRankWithContext(ctx context.Context, key string, member st
 //
 // Example:
 //
-//	added, err := manager.SAdd("myset", "member1", "member2", "member3")
+//	ctx := context.Background()
+//	added, err := manager.SAddWithContext(ctx, "myset", "member1", "member2", "member3")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -1028,7 +1058,8 @@ func (m *Manager) SAddWithContext(ctx context.Context, key string, members ...an
 //
 // Example:
 //
-//	removed, err := manager.SRem("myset", "member1", "member2")
+//	ctx := context.Background()
+//	removed, err := manager.SRemWithContext(ctx, "myset", "member1", "member2")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -1056,7 +1087,8 @@ func (m *Manager) SRemWithContext(ctx context.Context, key string, members ...an
 //
 // Example:
 //
-//	members, err := manager.SMembers("myset")
+//	ctx := context.Background()
+//	members, err := manager.SMembersWithContext(ctx, "myset")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -1083,7 +1115,8 @@ func (m *Manager) SMembersWithContext(ctx context.Context, key string) ([]string
 //
 // Example:
 //
-//	count, err := manager.SCard("myset")
+//	ctx := context.Background()
+//	count, err := manager.SCardWithContext(ctx, "myset")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -1111,7 +1144,8 @@ func (m *Manager) SCardWithContext(ctx context.Context, key string) (int, error)
 //
 // Example:
 //
-//	isMember, err := manager.SIsMember("myset", "member1")
+//	ctx := context.Background()
+//	isMember, err := manager.SIsMemberWithContext(ctx, "myset", "member1")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -1142,7 +1176,8 @@ func (m *Manager) SIsMemberWithContext(ctx context.Context, key string, member a
 //
 // Example:
 //
-//	member, err := manager.SPop("myset")
+//	ctx := context.Background()
+//	member, err := manager.SPopWithContext(ctx, "myset")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -1169,7 +1204,8 @@ func (m *Manager) SPopWithContext(ctx context.Context, key string) (string, erro
 //
 // Example:
 //
-//	member, err := manager.SRandMember("myset")
+//	ctx := context.Background()
+//	member, err := manager.SRandMemberWithContext(ctx, "myset")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -1197,7 +1233,8 @@ func (m *Manager) SRandMemberWithContext(ctx context.Context, key string) (strin
 //
 // Example:
 //
-//	receivers, err := manager.Publish("mychannel", "Hello, subscribers!")
+//	ctx := context.Background()
+//	receivers, err := manager.PublishWithContext(ctx, "mychannel", "Hello, subscribers!")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -1224,7 +1261,8 @@ func (m *Manager) PublishWithContext(ctx context.Context, channel string, messag
 //
 // Example:
 //
-//	psc, err := manager.Subscribe("channel1", "channel2")
+//	ctx := context.Background()
+//	psc, err := manager.SubscribeWithContext(ctx, ctx, "channel1", "channel2")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -1273,7 +1311,8 @@ func (m *Manager) SubscribeWithContext(ctx context.Context, channels ...any) (*r
 //
 // Example:
 //
-//	psc, err := manager.PSubscribe("channel*", "user.*")
+//	ctx := context.Background()
+//	psc, err := manager.PSubscribeWithContext(ctx, "channel*", "user.*")
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
@@ -1327,8 +1366,9 @@ func (m *Manager) PSubscribeWithContext(ctx context.Context, patterns ...any) (*
 //	    Name  string
 //	    Email string
 //	}
+//	ctx := context.Background()
 //	user := User{Name: "John Doe", Email: "john@example.com"}
-//	err := manager.SetJSON("user:1", user, 3600) // Expire in 1 hour
+//	err := manager.SetJSONWithContext(ctx, "user:1", user, 3600) // Expire in 1 hour
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
