@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/gomodule/redigo/redis"
 	"log"
+	"reflect"
 	"strconv"
 )
 
@@ -1437,6 +1438,12 @@ func (m *Manager) SubscribeWithContext(ctx context.Context, channels ...any) (*r
 		return nil, err
 	}
 
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
+
 	psc := &redis.PubSubConn{Conn: conn}
 	prefixedChannels := make([]any, len(channels))
 	for i, ch := range channels {
@@ -1445,7 +1452,6 @@ func (m *Manager) SubscribeWithContext(ctx context.Context, channels ...any) (*r
 
 	err = psc.Subscribe(prefixedChannels...)
 	if err != nil {
-		conn.Close()
 		return nil, err
 	}
 
@@ -1487,6 +1493,12 @@ func (m *Manager) PSubscribeWithContext(ctx context.Context, patterns ...any) (*
 		return nil, err
 	}
 
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
+
 	psc := &redis.PubSubConn{Conn: conn}
 	prefixedPatterns := make([]any, len(patterns))
 	for i, p := range patterns {
@@ -1495,7 +1507,6 @@ func (m *Manager) PSubscribeWithContext(ctx context.Context, patterns ...any) (*
 
 	err = psc.PSubscribe(prefixedPatterns...)
 	if err != nil {
-		conn.Close()
 		return nil, err
 	}
 
@@ -1605,4 +1616,350 @@ func (m *Manager) GetJSONWithContext(ctx context.Context, key string, value any)
 	}
 
 	return nil
+}
+
+// LPopJSONWithContext removes and returns the first element from the list stored at key, unmarshalling it into the provided value.
+//
+// Parameters:
+//   - ctx: The context for the Redis command
+//   - key: The Redis key of the list.
+//   - value: A pointer to the variable where the unmarshalled JSON data will be stored.
+//
+// Returns:
+//   - error: An error if the operation fails, or nil if successful.
+//     Returns ErrNil if the list is empty.
+//
+// Example:
+//
+//	var person Person
+//	err := manager.LPopJSON("people_list", &person)
+//	if err != nil {
+//	    if err == redis.ErrNil {
+//	        fmt.Println("List is empty")
+//	    } else {
+//	        log.Printf("Failed to pop from list: %v", err)
+//	    }
+//	    return
+//	}
+//	fmt.Printf("Popped person: %+v\n", person)
+func (m *Manager) LPopJSONWithContext(ctx context.Context, key string, value any) error {
+	// Ensure value is a pointer
+	if reflect.ValueOf(value).Kind() != reflect.Ptr {
+		return fmt.Errorf("value must be a pointer")
+	}
+
+	// Get a connection from the pool
+	conn, err := m.ConnPool.GetContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
+
+	// Execute LPOP command and retrieve the result as bytes
+	data, err := redis.Bytes(conn.Do("LPOP", m.prefixKey(key)))
+	if err != nil {
+		return err
+	}
+
+	// Unmarshal the JSON data into the provided value
+	return json.Unmarshal(data, value)
+}
+
+// RPopJSONWithContext removes and returns the last element from the list stored at key, unmarshalling it into the provided value.
+//
+// Parameters:
+//   - ctx: The context for the Redis command
+//   - key: The Redis key of the list.
+//   - value: A pointer to the variable where the unmarshalled JSON data will be stored.
+//
+// Returns:
+//   - error: An error if the operation fails, or nil if successful.
+//     Returns ErrNil if the list is empty.
+//
+// Example:
+//
+//	var task Task
+//	err := manager.RPopJSON("task_queue", &task)
+//	if err != nil {
+//	    if err == redis.ErrNil {
+//	        fmt.Println("Queue is empty")
+//	    } else {
+//	        log.Printf("Failed to pop from list: %v", err)
+//	    }
+//	    return
+//	}
+//	fmt.Printf("Popped task: %+v\n", task)
+func (m *Manager) RPopJSONWithContext(ctx context.Context, key string, value any) error {
+	// Ensure value is a pointer
+	if reflect.ValueOf(value).Kind() != reflect.Ptr {
+		return fmt.Errorf("value must be a pointer")
+	}
+
+	// Get a connection from the pool
+	conn, err := m.ConnPool.GetContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
+
+	// Execute RPOP command and retrieve the result as bytes
+	data, err := redis.Bytes(conn.Do("RPOP", m.prefixKey(key)))
+	if err != nil {
+		return err
+	}
+
+	// Unmarshal the JSON data into the provided value
+	return json.Unmarshal(data, value)
+}
+
+// LPushJSONWithContext adds one or more elements to the beginning of the list stored at key, marshalled from the provided values.
+//
+// Parameters:
+//   - ctx: The context for the Redis command
+//   - key: The Redis key of the list.
+//   - values: One or more values to be marshalled to JSON and pushed to the list.
+//
+// Returns:
+//   - error: An error if the operation fails, or nil if successful.
+//
+// Example:
+//
+//	person1 := Person{Name: "Alice", Age: 30}
+//	person2 := Person{Name: "Bob", Age: 25}
+//	err := manager.LPushJSON("people_list", person1, person2)
+//	if err != nil {
+//	    log.Printf("Failed to push to list: %v", err)
+//	    return
+//	}
+func (m *Manager) LPushJSONWithContext(ctx context.Context, key string, values ...any) error {
+	// Get a connection from the pool
+	conn, err := m.ConnPool.GetContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
+
+	// Prepare arguments for LPUSH
+	args := redis.Args{}.Add(m.prefixKey(key))
+	for _, value := range values {
+		jsonData, err := json.Marshal(value)
+		if err != nil {
+			return err
+		}
+		args = args.Add(jsonData)
+	}
+
+	// Execute LPUSH command with all JSON data at once
+	_, err = conn.Do("LPUSH", args...)
+	return err
+}
+
+// RPushJSONWithContext adds one or more elements to the end of the list stored at key, marshalled from the provided values.
+//
+// Parameters:
+//   - ctx: The context for the Redis command
+//   - key: The Redis key of the list.
+//   - values: One or more values to be marshalled to JSON and pushed to the list.
+//
+// Returns:
+//   - error: An error if the operation fails, or nil if successful.
+//
+// Example:
+//
+//	task1 := Task{ID: 1, Description: "Do something"}
+//	task2 := Task{ID: 2, Description: "Do something else"}
+//	err := manager.RPushJSON("task_queue", task1, task2)
+//	if err != nil {
+//	    log.Printf("Failed to push to list: %v", err)
+//	    return
+//	}
+func (m *Manager) RPushJSONWithContext(ctx context.Context, key string, values ...any) error {
+	// Get a connection from the pool
+	conn, err := m.ConnPool.GetContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
+
+	// Prepare arguments for RPUSH
+	args := redis.Args{}.Add(m.prefixKey(key))
+	for _, value := range values {
+		jsonData, err := json.Marshal(value)
+		if err != nil {
+			return err
+		}
+		args = args.Add(jsonData)
+	}
+
+	// Execute RPUSH command with all JSON data at once
+	_, err = conn.Do("RPUSH", args...)
+	return err
+}
+
+// LPopWithContext removes and returns the first element from the list stored at key as a string.
+//
+// Parameters:
+//   - ctx: The context for the Redis command
+//   - key: The Redis key of the list.
+//
+// Returns:
+//   - []byte: The popped element as a []byte.
+//   - error: An error if the operation fails, or nil if successful.
+//     Returns ErrNil if the list is empty.
+//
+// Example:
+//
+//	element, err := manager.LPop("my_list")
+//	if err != nil {
+//	    if err == redis.ErrNil {
+//	        fmt.Println("List is empty")
+//	    } else {
+//	        log.Printf("Failed to pop from list: %v", err)
+//	    }
+//	    return
+//	}
+//	fmt.Printf("Popped element: %s\n", element)
+func (m *Manager) LPopWithContext(ctx context.Context, key string) ([]byte, error) {
+	// Get a connection from the pool
+	conn, err := m.ConnPool.GetContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
+
+	// Execute LPOP command and return the result as a string
+	return redis.Bytes(conn.Do("LPOP", m.prefixKey(key)))
+}
+
+// RPopWithContext removes and returns the last element from the list stored at key as a string.
+//
+// Parameters:
+//   - ctx: The context for the Redis command
+//   - key: The Redis key of the list.
+//
+// Returns:
+//   - []byte: The popped element as a []byte.
+//   - error: An error if the operation fails, or nil if successful.
+//     Returns ErrNil if the list is empty.
+//
+// Example:
+//
+//	element, err := manager.RPop("my_list")
+//	if err != nil {
+//	    if err == redis.ErrNil {
+//	        fmt.Println("List is empty")
+//	    } else {
+//	        log.Printf("Failed to pop from list: %v", err)
+//	    }
+//	    return
+//	}
+//	fmt.Printf("Popped element: %s\n", element)
+func (m *Manager) RPopWithContext(ctx context.Context, key string) ([]byte, error) {
+	// Get a connection from the pool
+	conn, err := m.ConnPool.GetContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
+
+	// Execute RPOP command and return the result as a string
+	return redis.Bytes(conn.Do("RPOP", m.prefixKey(key)))
+}
+
+// LPushWithContext adds one or more elements to the beginning of the list stored at key.
+//
+// Parameters:
+//   - ctx: The context for the Redis command
+//   - key: The Redis key of the list.
+//   - values: One or more values to be pushed to the list.
+//
+// Returns:
+//   - error: An error if the operation fails, or nil if successful.
+//
+// Example:
+//
+//	err := manager.LPush("my_list", "item1", "item2", "item3")
+//	if err != nil {
+//	    log.Printf("Failed to push to list: %v", err)
+//	    return
+//	}
+func (m *Manager) LPushWithContext(ctx context.Context, key string, values ...any) error {
+	// Get a connection from the pool
+	conn, err := m.ConnPool.GetContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
+
+	// Prepare arguments for LPUSH
+	args := redis.Args{}.Add(m.prefixKey(key)).AddFlat(values)
+
+	// Execute LPUSH command with all values at once
+	_, err = conn.Do("LPUSH", args...)
+	return err
+}
+
+// RPushWithContext adds one or more elements to the end of the list stored at key.
+//
+// Parameters:
+//   - ctx: The context for the Redis command
+//   - key: The Redis key of the list.
+//   - values: One or more values to be pushed to the list.
+//
+// Returns:
+//   - error: An error if the operation fails, or nil if successful.
+//
+// Example:
+//
+//	err := manager.RPush("my_list", "item1", "item2", "item3")
+//	if err != nil {
+//	    log.Printf("Failed to push to list: %v", err)
+//	    return
+//	}
+func (m *Manager) RPushWithContext(ctx context.Context, key string, values ...any) error {
+	// Get a connection from the pool
+	conn, err := m.ConnPool.GetContext(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
+
+	// Prepare arguments for RPUSH
+	args := redis.Args{}.Add(m.prefixKey(key)).AddFlat(values)
+
+	// Execute RPUSH command with all values at once
+	_, err = conn.Do("RPUSH", args...)
+	return err
 }
