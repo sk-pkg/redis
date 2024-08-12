@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gomodule/redigo/redis"
+	"log"
 	"strconv"
 )
 
@@ -38,7 +39,11 @@ func (m *Manager) DoWithContext(ctx context.Context, commandName string, args ..
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.DoContext(conn, ctx, commandName, args...)
 }
@@ -68,7 +73,11 @@ func (m *Manager) LuaWithContext(ctx context.Context, keyCount int, script strin
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{}.AddFlat(keysAndArgs)
 	lua := redis.NewScript(keyCount, script)
@@ -99,7 +108,11 @@ func (m *Manager) ExistsWithContext(ctx context.Context, key string) (bool, erro
 	if err != nil {
 		return false, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Bool(conn.Do("EXISTS", m.prefixKey(key)))
 }
@@ -127,7 +140,11 @@ func (m *Manager) DelWithContext(ctx context.Context, key string) (bool, error) 
 	if err != nil {
 		return false, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Bool(conn.Do("DEL", m.prefixKey(key)))
 }
@@ -167,7 +184,11 @@ func (m *Manager) BatchDelWithContext(ctx context.Context, pattern string) error
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	// Initialize cursor and create the full pattern
 	cursor := 0
@@ -225,7 +246,11 @@ func (m *Manager) TtlWithContext(ctx context.Context, key string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("TTL", m.prefixKey(key)))
 }
@@ -252,7 +277,11 @@ func (m *Manager) ExpireWithContext(ctx context.Context, key string, ttl int) er
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	_, err = conn.Do("EXPIRE", m.prefixKey(key), ttl)
 
@@ -282,7 +311,11 @@ func (m *Manager) SetWithContext(ctx context.Context, key string, data any, ttl 
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	if ttl > 0 {
 		_, err = conn.Do("SET", m.prefixKey(key), data, "EX", ttl)
@@ -316,7 +349,11 @@ func (m *Manager) SetStringWithContext(ctx context.Context, key string, str stri
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	if ttl > 0 {
 		_, err = conn.Do("SET", m.prefixKey(key), str, "EX", ttl)
@@ -350,7 +387,11 @@ func (m *Manager) GetStringWithContext(ctx context.Context, key string) (string,
 	if err != nil {
 		return "", err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 	exist, err := redis.Bool(conn.Do("EXISTS", m.prefixKey(key)))
 	if !exist || err != nil {
 		return "", err
@@ -385,7 +426,11 @@ func (m *Manager) GetWithContext(ctx context.Context, key string) ([]byte, error
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	exists, err := redis.Bool(conn.Do("EXISTS", m.prefixKey(key)))
 	if err != nil {
@@ -423,7 +468,11 @@ func (m *Manager) SetNXWithContext(ctx context.Context, key string, value any, s
 	if err != nil {
 		return false, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{m.prefixKey(key), value}.Add("NX")
 	if sec > 0 {
@@ -463,7 +512,11 @@ func (m *Manager) IncrWithContext(ctx context.Context, key string) (int, error) 
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("INCR", m.prefixKey(key)))
 }
@@ -492,7 +545,11 @@ func (m *Manager) IncrByWithContext(ctx context.Context, key string, value int) 
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("INCRBY", m.prefixKey(key), value))
 }
@@ -520,7 +577,11 @@ func (m *Manager) DecrWithContext(ctx context.Context, key string) (int, error) 
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("DECR", m.prefixKey(key)))
 }
@@ -549,7 +610,11 @@ func (m *Manager) DecrByWithContext(ctx context.Context, key string, value int) 
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("DECRBY", m.prefixKey(key), value))
 }
@@ -577,7 +642,11 @@ func (m *Manager) HSetWithContext(ctx context.Context, key, field string, value 
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	_, err = conn.Do("HSET", m.prefixKey(key), field, value)
 	return err
@@ -607,7 +676,11 @@ func (m *Manager) HGetWithContext(ctx context.Context, key, field string) (strin
 	if err != nil {
 		return "", err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.String(conn.Do("HGET", m.prefixKey(key), field))
 }
@@ -637,7 +710,11 @@ func (m *Manager) HGetAllWithContext(ctx context.Context, key string) (map[strin
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.StringMap(conn.Do("HGETALL", m.prefixKey(key)))
 }
@@ -666,7 +743,11 @@ func (m *Manager) HDelWithContext(ctx context.Context, key string, fields ...any
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{}.Add(m.Prefix + key).AddFlat(fields)
 	return redis.Int(conn.Do("HDEL", args...))
@@ -698,7 +779,11 @@ func (m *Manager) ZAddWithContext(ctx context.Context, key string, members ...ZS
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{}.Add(m.Prefix + key)
 	for _, member := range members {
@@ -732,7 +817,11 @@ func (m *Manager) ZRemWithContext(ctx context.Context, key string, members ...an
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{}.Add(m.Prefix + key).AddFlat(members)
 	return redis.Int(conn.Do("ZREM", args...))
@@ -765,7 +854,11 @@ func (m *Manager) ZRangeWithContext(ctx context.Context, key string, start, stop
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Strings(conn.Do("ZRANGE", m.prefixKey(key), start, stop))
 }
@@ -797,7 +890,11 @@ func (m *Manager) ZRangeWithScoresWithContext(ctx context.Context, key string, s
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	values, err := redis.Values(conn.Do("ZRANGE", m.prefixKey(key), start, stop, "WITHSCORES"))
 	if err != nil {
@@ -846,7 +943,11 @@ func (m *Manager) ZRevRangeWithContext(ctx context.Context, key string, start, s
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Strings(conn.Do("ZREVRANGE", m.prefixKey(key), start, stop))
 }
@@ -878,7 +979,11 @@ func (m *Manager) ZRevRangeWithScoresWithContext(ctx context.Context, key string
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	values, err := redis.Values(conn.Do("ZREVRANGE", m.prefixKey(key), start, stop, "WITHSCORES"))
 	if err != nil {
@@ -923,7 +1028,11 @@ func (m *Manager) ZCardWithContext(ctx context.Context, key string) (int, error)
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("ZCARD", m.prefixKey(key)))
 }
@@ -952,7 +1061,11 @@ func (m *Manager) ZScoreWithContext(ctx context.Context, key string, member stri
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Float64(conn.Do("ZSCORE", m.prefixKey(key), member))
 }
@@ -981,7 +1094,11 @@ func (m *Manager) ZRankWithContext(ctx context.Context, key string, member strin
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("ZRANK", m.prefixKey(key), member))
 }
@@ -1010,7 +1127,11 @@ func (m *Manager) ZRevRankWithContext(ctx context.Context, key string, member st
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("ZREVRANK", m.prefixKey(key), member))
 }
@@ -1039,7 +1160,11 @@ func (m *Manager) SAddWithContext(ctx context.Context, key string, members ...an
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{}.Add(m.Prefix + key).AddFlat(members)
 	return redis.Int(conn.Do("SADD", args...))
@@ -1069,7 +1194,11 @@ func (m *Manager) SRemWithContext(ctx context.Context, key string, members ...an
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{}.Add(m.Prefix + key).AddFlat(members)
 	return redis.Int(conn.Do("SREM", args...))
@@ -1098,7 +1227,11 @@ func (m *Manager) SMembersWithContext(ctx context.Context, key string) ([]string
 	if err != nil {
 		return nil, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Strings(conn.Do("SMEMBERS", m.prefixKey(key)))
 }
@@ -1126,7 +1259,11 @@ func (m *Manager) SCardWithContext(ctx context.Context, key string) (int, error)
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("SCARD", m.prefixKey(key)))
 }
@@ -1159,7 +1296,11 @@ func (m *Manager) SIsMemberWithContext(ctx context.Context, key string, member a
 	if err != nil {
 		return false, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Bool(conn.Do("SISMEMBER", m.prefixKey(key), member))
 }
@@ -1187,7 +1328,11 @@ func (m *Manager) SPopWithContext(ctx context.Context, key string) (string, erro
 	if err != nil {
 		return "", err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.String(conn.Do("SPOP", m.prefixKey(key)))
 }
@@ -1215,7 +1360,11 @@ func (m *Manager) SRandMemberWithContext(ctx context.Context, key string) (strin
 	if err != nil {
 		return "", err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.String(conn.Do("SRANDMEMBER", m.prefixKey(key)))
 }
@@ -1244,7 +1393,11 @@ func (m *Manager) PublishWithContext(ctx context.Context, channel string, messag
 	if err != nil {
 		return 0, err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("PUBLISH", m.Prefix+channel, message))
 }
@@ -1377,7 +1530,11 @@ func (m *Manager) SetJSONWithContext(ctx context.Context, key string, value any,
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	jsonData, err := json.Marshal(value)
 	if err != nil {
@@ -1422,7 +1579,11 @@ func (m *Manager) GetJSONWithContext(ctx context.Context, key string, value any)
 		return err
 	}
 
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	reply, err := conn.Do("GET", m.Prefix+key)
 	if err != nil {

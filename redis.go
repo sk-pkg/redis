@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gomodule/redigo/redis"
+	"log"
 	"strconv"
 	"time"
 )
@@ -209,7 +210,11 @@ func (m *Manager) Ping() error {
 //	}
 func (m *Manager) Do(commandName string, args ...any) (any, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 	return conn.Do(commandName, args...)
 }
 
@@ -233,7 +238,11 @@ func (m *Manager) Do(commandName string, args ...any) (any, error) {
 //	}
 func (m *Manager) Lua(keyCount int, script string, keysAndArgs []string) (any, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{}.AddFlat(keysAndArgs)
 	lua := redis.NewScript(keyCount, script)
@@ -259,7 +268,11 @@ func (m *Manager) Lua(keyCount int, script string, keysAndArgs []string) (any, e
 //	fmt.Printf("Key exists: %v\n", exists)
 func (m *Manager) Exists(key string) (bool, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Bool(conn.Do("EXISTS", m.prefixKey(key)))
 }
@@ -282,7 +295,11 @@ func (m *Manager) Exists(key string) (bool, error) {
 //	fmt.Printf("Key deleted: %v\n", deleted)
 func (m *Manager) Del(key string) (bool, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Bool(conn.Do("DEL", m.prefixKey(key)))
 }
@@ -317,7 +334,11 @@ func (m *Manager) Del(key string) (bool, error) {
 func (m *Manager) BatchDel(pattern string) error {
 	// Get a connection from the pool
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	// Initialize cursor and create the full pattern
 	cursor := 0
@@ -370,7 +391,11 @@ func (m *Manager) BatchDel(pattern string) error {
 //	fmt.Printf("Time to live: %d seconds\n", ttl)
 func (m *Manager) Ttl(key string) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("TTL", m.prefixKey(key)))
 }
@@ -392,7 +417,11 @@ func (m *Manager) Ttl(key string) (int, error) {
 //	}
 func (m *Manager) Expire(key string, ttl int) error {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	_, err := conn.Do("EXPIRE", m.prefixKey(key), ttl)
 
@@ -417,7 +446,11 @@ func (m *Manager) Expire(key string, ttl int) error {
 //	}
 func (m *Manager) Set(key string, data any, ttl int) (err error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	if ttl > 0 {
 		_, err = conn.Do("SET", m.prefixKey(key), data, "EX", ttl)
@@ -446,7 +479,11 @@ func (m *Manager) Set(key string, data any, ttl int) (err error) {
 //	}
 func (m *Manager) SetString(key string, str string, ttl int) (err error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	if ttl > 0 {
 		_, err = conn.Do("SET", m.prefixKey(key), str, "EX", ttl)
@@ -475,7 +512,11 @@ func (m *Manager) SetString(key string, str string, ttl int) (err error) {
 //	fmt.Println(str)
 func (m *Manager) GetString(key string) (string, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 	exist, err := redis.Bool(conn.Do("EXISTS", m.prefixKey(key)))
 	if !exist || err != nil {
 		return "", err
@@ -505,7 +546,11 @@ func (m *Manager) GetString(key string) (string, error) {
 //	}
 func (m *Manager) Get(key string) ([]byte, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	exists, err := redis.Bool(conn.Do("EXISTS", m.prefixKey(key)))
 	if err != nil {
@@ -538,7 +583,11 @@ func (m *Manager) Get(key string) ([]byte, error) {
 //	fmt.Printf("Key was set: %v\n", set)
 func (m *Manager) SetNX(key string, value any, sec int) (bool, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{m.prefixKey(key), value}.Add("NX")
 	if sec > 0 {
@@ -573,7 +622,11 @@ func (m *Manager) SetNX(key string, value any, sec int) (bool, error) {
 //	fmt.Printf("New visitor count: %d\n", newValue)
 func (m *Manager) Incr(key string) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("INCR", m.prefixKey(key)))
 }
@@ -597,7 +650,11 @@ func (m *Manager) Incr(key string) (int, error) {
 //	fmt.Printf("New score: %d\n", newValue)
 func (m *Manager) IncrBy(key string, value int) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("INCRBY", m.prefixKey(key), value))
 }
@@ -620,7 +677,11 @@ func (m *Manager) IncrBy(key string, value int) (int, error) {
 //	fmt.Printf("Updated stock count: %d\n", newValue)
 func (m *Manager) Decr(key string) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("DECR", m.prefixKey(key)))
 }
@@ -644,7 +705,11 @@ func (m *Manager) Decr(key string) (int, error) {
 //	fmt.Printf("Updated points: %d\n", newValue)
 func (m *Manager) DecrBy(key string, value int) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("DECRBY", m.prefixKey(key), value))
 }
@@ -667,7 +732,11 @@ func (m *Manager) DecrBy(key string, value int) (int, error) {
 //	}
 func (m *Manager) HSet(key, field string, value any) error {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	_, err := conn.Do("HSET", m.prefixKey(key), field, value)
 	return err
@@ -692,7 +761,11 @@ func (m *Manager) HSet(key, field string, value any) error {
 //	fmt.Printf("User name: %s\n", value)
 func (m *Manager) HGet(key, field string) (string, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.String(conn.Do("HGET", m.prefixKey(key), field))
 }
@@ -717,7 +790,11 @@ func (m *Manager) HGet(key, field string) (string, error) {
 //	}
 func (m *Manager) HGetAll(key string) (map[string]string, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.StringMap(conn.Do("HGETALL", m.prefixKey(key)))
 }
@@ -741,7 +818,11 @@ func (m *Manager) HGetAll(key string) (map[string]string, error) {
 //	fmt.Printf("Number of fields removed: %d\n", removed)
 func (m *Manager) HDel(key string, fields ...any) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{}.Add(m.Prefix + key).AddFlat(fields)
 	return redis.Int(conn.Do("HDEL", args...))
@@ -768,7 +849,11 @@ func (m *Manager) HDel(key string, fields ...any) (int, error) {
 //	fmt.Printf("Number of new members added: %d\n", added)
 func (m *Manager) ZAdd(key string, members ...ZSetMember) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{}.Add(m.Prefix + key)
 	for _, member := range members {
@@ -797,7 +882,11 @@ func (m *Manager) ZAdd(key string, members ...ZSetMember) (int, error) {
 //	fmt.Printf("Number of members removed: %d\n", removed)
 func (m *Manager) ZRem(key string, members ...any) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{}.Add(m.Prefix + key).AddFlat(members)
 	return redis.Int(conn.Do("ZREM", args...))
@@ -825,7 +914,11 @@ func (m *Manager) ZRem(key string, members ...any) (int, error) {
 //	}
 func (m *Manager) ZRange(key string, start, stop int) ([]string, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Strings(conn.Do("ZRANGE", m.prefixKey(key), start, stop))
 }
@@ -852,7 +945,11 @@ func (m *Manager) ZRange(key string, start, stop int) ([]string, error) {
 //	}
 func (m *Manager) ZRangeWithScores(key string, start, stop int) ([]ZSetMember, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	values, err := redis.Values(conn.Do("ZRANGE", m.prefixKey(key), start, stop, "WITHSCORES"))
 	if err != nil {
@@ -896,7 +993,11 @@ func (m *Manager) ZRangeWithScores(key string, start, stop int) ([]ZSetMember, e
 //	}
 func (m *Manager) ZRevRange(key string, start, stop int) ([]string, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Strings(conn.Do("ZREVRANGE", m.prefixKey(key), start, stop))
 }
@@ -923,7 +1024,11 @@ func (m *Manager) ZRevRange(key string, start, stop int) ([]string, error) {
 //	}
 func (m *Manager) ZRevRangeWithScores(key string, start, stop int) ([]ZSetMember, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	values, err := redis.Values(conn.Do("ZREVRANGE", m.prefixKey(key), start, stop, "WITHSCORES"))
 	if err != nil {
@@ -963,7 +1068,11 @@ func (m *Manager) ZRevRangeWithScores(key string, start, stop int) ([]ZSetMember
 //	fmt.Printf("Number of members in leaderboard: %d\n", count)
 func (m *Manager) ZCard(key string) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("ZCARD", m.prefixKey(key)))
 }
@@ -987,7 +1096,11 @@ func (m *Manager) ZCard(key string) (int, error) {
 //	fmt.Printf("Score of player1: %.2f\n", score)
 func (m *Manager) ZScore(key string, member string) (float64, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Float64(conn.Do("ZSCORE", m.prefixKey(key), member))
 }
@@ -1011,7 +1124,11 @@ func (m *Manager) ZScore(key string, member string) (float64, error) {
 //	fmt.Printf("Rank of player1: %d\n", rank)
 func (m *Manager) ZRank(key string, member string) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("ZRANK", m.prefixKey(key), member))
 }
@@ -1035,7 +1152,11 @@ func (m *Manager) ZRank(key string, member string) (int, error) {
 //	fmt.Printf("Reverse rank of player1: %d\n", rank)
 func (m *Manager) ZRevRank(key string, member string) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("ZREVRANK", m.prefixKey(key), member))
 }
@@ -1059,7 +1180,11 @@ func (m *Manager) ZRevRank(key string, member string) (int, error) {
 //	fmt.Printf("Number of new members added: %d\n", added)
 func (m *Manager) SAdd(key string, members ...any) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{}.Add(m.Prefix + key).AddFlat(members)
 	return redis.Int(conn.Do("SADD", args...))
@@ -1084,7 +1209,11 @@ func (m *Manager) SAdd(key string, members ...any) (int, error) {
 //	fmt.Printf("Number of members removed: %d\n", removed)
 func (m *Manager) SRem(key string, members ...any) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	args := redis.Args{}.Add(m.Prefix + key).AddFlat(members)
 	return redis.Int(conn.Do("SREM", args...))
@@ -1108,7 +1237,11 @@ func (m *Manager) SRem(key string, members ...any) (int, error) {
 //	fmt.Println("Set members:", members)
 func (m *Manager) SMembers(key string) ([]string, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Strings(conn.Do("SMEMBERS", m.prefixKey(key)))
 }
@@ -1131,7 +1264,11 @@ func (m *Manager) SMembers(key string) ([]string, error) {
 //	fmt.Printf("Number of members in set: %d\n", count)
 func (m *Manager) SCard(key string) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("SCARD", m.prefixKey(key)))
 }
@@ -1159,7 +1296,11 @@ func (m *Manager) SCard(key string) (int, error) {
 //	}
 func (m *Manager) SIsMember(key string, member any) (bool, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Bool(conn.Do("SISMEMBER", m.prefixKey(key), member))
 }
@@ -1182,7 +1323,11 @@ func (m *Manager) SIsMember(key string, member any) (bool, error) {
 //	fmt.Printf("Removed member: %s\n", member)
 func (m *Manager) SPop(key string) (string, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.String(conn.Do("SPOP", m.prefixKey(key)))
 }
@@ -1205,7 +1350,11 @@ func (m *Manager) SPop(key string) (string, error) {
 //	fmt.Printf("Random member: %s\n", member)
 func (m *Manager) SRandMember(key string) (string, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.String(conn.Do("SRANDMEMBER", m.prefixKey(key)))
 }
@@ -1229,7 +1378,11 @@ func (m *Manager) SRandMember(key string) (string, error) {
 //	fmt.Printf("Message sent to %d subscribers\n", receivers)
 func (m *Manager) Publish(channel string, message any) (int, error) {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	return redis.Int(conn.Do("PUBLISH", m.Prefix+channel, message))
 }
@@ -1263,6 +1416,11 @@ func (m *Manager) Publish(channel string, message any) (int, error) {
 //	}
 func (m *Manager) Subscribe(channels ...any) (*redis.PubSubConn, error) {
 	conn := m.ConnPool.Get()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	psc := &redis.PubSubConn{Conn: conn}
 	prefixedChannels := make([]any, len(channels))
@@ -1272,7 +1430,6 @@ func (m *Manager) Subscribe(channels ...any) (*redis.PubSubConn, error) {
 
 	err := psc.Subscribe(prefixedChannels...)
 	if err != nil {
-		conn.Close()
 		return nil, err
 	}
 
@@ -1308,6 +1465,11 @@ func (m *Manager) Subscribe(channels ...any) (*redis.PubSubConn, error) {
 //	}
 func (m *Manager) PSubscribe(patterns ...any) (*redis.PubSubConn, error) {
 	conn := m.ConnPool.Get()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	psc := &redis.PubSubConn{Conn: conn}
 	prefixedPatterns := make([]any, len(patterns))
@@ -1317,7 +1479,6 @@ func (m *Manager) PSubscribe(patterns ...any) (*redis.PubSubConn, error) {
 
 	err := psc.PSubscribe(prefixedPatterns...)
 	if err != nil {
-		conn.Close()
 		return nil, err
 	}
 
@@ -1347,7 +1508,11 @@ func (m *Manager) PSubscribe(patterns ...any) (*redis.PubSubConn, error) {
 //	}
 func (m *Manager) SetJSON(key string, value any, expiration int) error {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	jsonData, err := json.Marshal(value)
 	if err != nil {
@@ -1386,7 +1551,11 @@ func (m *Manager) SetJSON(key string, value any, expiration int) error {
 //	fmt.Printf("Retrieved user: %+v\n", user)
 func (m *Manager) GetJSON(key string, value any) error {
 	conn := m.ConnPool.Get()
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error closing connection: %v", err)
+		}
+	}()
 
 	reply, err := conn.Do("GET", m.Prefix+key)
 	if err != nil {
