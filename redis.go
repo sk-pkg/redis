@@ -1370,7 +1370,6 @@ func (m *Manager) SetJSON(key string, value any, expiration int) error {
 //   - value: A pointer to the value where the unmarshalled JSON data will be stored
 //
 // Returns:
-//   - bool: True if the key exists and the data was successfully retrieved and unmarshalled, false otherwise
 //   - error: Any error that occurred during the operation
 //
 // Example:
@@ -1379,37 +1378,34 @@ func (m *Manager) SetJSON(key string, value any, expiration int) error {
 //	    Name  string
 //	    Email string
 //	}
-//	exists, err := manager.GetJSON("user:1", &user)
+//	err := manager.GetJSON("user:1", &user)
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
-//	if exists {
-//	    fmt.Printf("Retrieved user: %+v\n", user)
-//	} else {
-//	    fmt.Println("User not found")
-//	}
-func (m *Manager) GetJSON(key string, value any) (bool, error) {
+//
+//	fmt.Printf("Retrieved user: %+v\n", user)
+func (m *Manager) GetJSON(key string, value any) error {
 	conn := m.ConnPool.Get()
 	defer conn.Close()
 
 	reply, err := conn.Do("GET", m.Prefix+key)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	if reply == nil {
-		return false, nil
+		return redis.ErrNil
 	}
 
 	jsonData, err := redis.Bytes(reply, err)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	err = json.Unmarshal(jsonData, value)
 	if err != nil {
-		return false, err
+		return err
 	}
 
-	return true, nil
+	return nil
 }
