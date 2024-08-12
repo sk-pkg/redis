@@ -1355,7 +1355,7 @@ func (m *Manager) SetJSON(key string, value any, expiration int) error {
 	}
 
 	if expiration > 0 {
-		_, err = conn.Do("SETEX", m.Prefix+key, expiration, jsonData)
+		_, err = conn.Do("SET", m.prefixKey(key), jsonData, "EX", expiration)
 	} else {
 		_, err = conn.Do("SET", m.Prefix+key, jsonData)
 	}
